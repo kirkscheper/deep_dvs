@@ -1,0 +1,13 @@
+data/
+images_normal_bi_1000/
+images_normal_mono_1000/
+images_split_normal_1000/
+images_split_normal_new_2500/
+images_split_normal_new_5000/
+images_split_normal_new_10000/
+images_split_variance/
+.*hdf5
+.*csv
+__pycache__/
+results/
+results_final/

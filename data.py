@@ -241,19 +241,29 @@ class DataSet():
     def validate_generator(self, batch_size):
 
         while 1:
+            data = dataset('')
 
+            # get the folder and sequence number
             if self.sequence_batch == True:
                 folder = random.choice(self.val)
-                seqNum = random.randint(self.starting + self.separation*(self.seq_length-1), folder[1] - batch_size - 1)
-
+                if self.online_sim:
+                    max_image_number = data.get_duration_of_dataset_ms(self.folder + '/' + str(self.train[0][0]) + '/' + str(self.train[0][0]) + '.bag')
+                    max_image_number = folder[1]
+                seqNum = random.randint(self.starting + self.separation*(self.seq_length-1), max_image_number - (batch_size- 1)*self.sim_settings.imgSkip)
+            
             X, y = [], []
-
+            
             # Generate batch_size samples.
             for _ in range(batch_size):
-
+                
+                # get the folder and sequence number
                 if self.sequence_batch == False:
                     folder = random.choice(self.val)
-                    seqNum = random.randint(self.starting, folder[1] - batch_size - 1)
+                    if self.online_sim:
+                        max_image_number = 1000 #data.get_duration_of_dataset_ms(self.folder + '/' + str(self.train[0][0]) + '/' + str(self.train[0][0]) + '.bag')
+                    else:
+                        max_image_number = folder[1]
+                    seqNum = random.randint(self.starting, max_image_number - batch_size - 1)
 
                 # reset
                 sequence = None

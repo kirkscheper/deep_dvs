@@ -373,8 +373,8 @@ class DataSet():
 
         if lamb < 1e-5:
             lamb = 1e-5
-        elif lamb > 0.0037: # will reach 10% of max within 10ms
-            lamb =  0.0037
+        elif lamb > 0.01:
+            lamb =  0.01
         lamb = np.full((1, 1), lamb)
             
         # get the frames in this sample

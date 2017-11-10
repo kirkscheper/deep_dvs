@@ -7,7 +7,7 @@ from models import ResearchModels
 from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, CSVLogger
 
 
-def train(model, saved_model = None, transfer_learning = None, seq_length = 150, dataFolder = 'dataset', stack = True, imType = None, separation = 0, pxShift = False, sequence = False):
+def train(model, saved_model = None, transfer_learning = None, seq_length = 150, dataFolder = 'dataset', imType = None, separation = 0, pxShift = False, sequence_batch = False):
 
     # generate directories
     pathCP   = './data/checkpoints/'
@@ -35,18 +35,18 @@ def train(model, saved_model = None, transfer_learning = None, seq_length = 150,
     csv_logger = CSVLogger(pathLogs + model + '-' + 'training-' + str(timestamp) + '.log')
 
     # initialize the dataset
-    data = DataSet(seq_length = seq_length, dataFolder = dataFolder, stack = stack, imType = imType, separation = separation, pxShift = pxShift, sequence = sequence)
+    data = DataSet(seq_length = seq_length, dataFolder = dataFolder, imType = imType, separation = separation, pxShift = pxShift, sequence_batch = sequence_batch)
 
     # set training variables
     nb_epoch = 1000
     batch_size = 8
 
-    # set generators
-    generator     = data.train_generator(batch_size)
-    val_generator = data.validate_generator(batch_size)
-
     # initialize the model
     rm = ResearchModels(model, seq_length, saved_model, imType, transfer_learning = transfer_learning)
+    
+     # set generators
+    generator     = data.train_generator(batch_size)
+    val_generator = data.validate_generator(batch_size)
 
     # use fit generator for training
     rm.model.fit_generator(
@@ -68,7 +68,7 @@ if __name__ == '__main__':
     model = 'FlowNetSimple'
 
     # path to dataset
-    dataFolder = '../dvs_simulator/generated_datasets/images/temporal_250'
+    dataFolder = '../dvs_simulator/generated_datasets/fede'#../dvs_simulator/generated_datasets/images/temporal_250'
 
     # load a checkpoint
     saved_model = None
@@ -79,9 +79,9 @@ if __name__ == '__main__':
 
     # is the batch a sequence?
     if model == 'convLSTM' or model == 'VGG_16':
-        sequence = True
+        sequence_batch = True
     else:
-        sequence = False
+        sequence_batch = False
 
     # image separation (if seq_length > 1)
     separation = 1
@@ -89,8 +89,5 @@ if __name__ == '__main__':
     # image type (ON, OFF, BOTH, None)
     imType = None
 
-    # stack images
-    stack = False
-
     # train the model
-    train(model, saved_model = saved_model, transfer_learning = transfer_learning, seq_length = seq_length, dataFolder = dataFolder, stack = stack, imType = imType, separation = separation, sequence = sequence)
+    train(model, saved_model = saved_model, transfer_learning = transfer_learning, seq_length = seq_length, dataFolder = dataFolder, imType = imType, separation = separation, sequence_batch = sequence_batch)

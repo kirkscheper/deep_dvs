@@ -49,7 +49,7 @@ def check(model, saved_model = None, seq_length = 150, dataFolder = 'dataset', s
 
         # count the number of images in this folder
         if imType == 'OFF' or imType == 'ON': path = dataFolder + '/' + maneuver + '/' + imType + '/'
-        elif imType == 'both': path = dataFolder + '/' + maneuver + '/' + 'ON' + '/' # just for counting frames
+        elif imType == 'BOTH': path = dataFolder + '/' + maneuver + '/' + 'ON' + '/' # just for counting frames
         else: path = dataFolder + '/' + maneuver + '/'
         pngs = len(glob.glob1(path,"*.png"))
 
@@ -97,8 +97,8 @@ if __name__ == '__main__':
     # image separation (if seq_length > 1)
     separation = 15
     
-    # image type
-    imType = 'both'
+    # image type (ON, OFF, BOTH)
+    imType = 'BOTH'
 
     # stack images
     stack = True

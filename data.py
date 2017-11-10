@@ -32,6 +32,9 @@ class DataSet():
 
         # get number of .png files
         self.usable_data()
+        
+        # assign trainging and validation data
+        self.split_train_val()
 
         # starting image
         self.starting = 11
@@ -69,7 +72,7 @@ class DataSet():
         for item in self.data:
             if self.imType == 'OFF' or self.imType == 'ON':
                 path = self.folder + '/' + item[1] + '/' + self.imType + '/'
-            elif self.imType == 'both':
+            elif self.imType == 'BOTH':
                 path = self.folder + '/' + item[1] + '/' + 'ON' + '/' # just for counting frames
             else:
                 path = self.folder + '/' + item[1] + '/'
@@ -81,18 +84,16 @@ class DataSet():
         del path, pngs
 
 
-    # split the incoming data in train and test groups
-    def split_train_test(self):
+    # split the incoming data in train and val groups
+    def split_train_val(self):
 
-        train = []
-        test  = []
+        self.train = []
+        self.val  = []
         for item in self.data:
             if item[0] == 'train':
-                train.append(item[1:])
-            else:
-                test.append(item[1:])
-
-        return train, test
+                self.train.append(item[1:])
+            elif item[0] == 'val':
+                self.val.append(item[1:])
 
 
     # get the corresponding frames from a sample
@@ -121,7 +122,7 @@ class DataSet():
                 # include the number of the desired image
                 if self.imType == 'OFF' or self.imType == 'ON':
                     images.append(path + self.imType + '/' + str(imgIdx) + '.png')
-                elif self.imType == 'both':
+                elif self.imType == 'BOTH':
                     images.append(path + 'ON' + '/' + str(imgIdx) + '.png')
                     images.append(path + 'OFF' + '/' + str(imgIdx) + '.png')
                 else:
@@ -137,7 +138,7 @@ class DataSet():
                 # include the number of the desired image
                 if self.imType == 'OFF' or self.imType == 'ON':
                     images.append(path + self.imType + '/' + str(i) + '.png')
-                elif self.imType == 'both':
+                elif self.imType == 'BOTH':
                     images.append(path + 'ON' + '/' + str(i) + '.png')
                     images.append(path + 'OFF' + '/' + str(i) + '.png')
                 else:
@@ -152,9 +153,8 @@ class DataSet():
         else:
             sequence = []
             if self.imType == 'OFF' or self.imType == 'ON' or self.imType == None:
-                for n in range(len(frames),0,-1):
-                    sequence.append(temporal_image(frames[n-1], self.image_shape))
-            elif self.imType == 'both':
+                sequence = temporal_image(frames[0], self.image_shape)
+            elif self.imType == 'BOTH':
                 sequence.append(stack_image(frames, self.image_shape)) 
 
             return sequence
@@ -186,11 +186,7 @@ class DataSet():
 
 
     def train_generator(self, batch_size):
-
-        # get the right dataset for the generator
-        train, test = self.split_train_test()
-        self.train = train
-
+        
         while 1:
 
             # get the folder and sequence number
@@ -206,7 +202,7 @@ class DataSet():
                 # get the folder and sequence number
                 if self.sequence == False:
                     folder = random.choice(self.train)
-                    seqNum = random.randint(self.starting + self.seq_length - 1 + self.separation*self.seq_length, folder[1] - batch_size - 1)
+                    seqNum = random.randint(self.starting, folder[1] - batch_size - 1)
 
                 # reset
                 sequence = None
@@ -236,14 +232,10 @@ class DataSet():
 
     def validate_generator(self, batch_size):
 
-        # Get the right dataset for the generator
-        train, test = self.split_train_test()
-        self.test = test
-
         while 1:
 
             if self.sequence == True:
-                folder = random.choice(self.test)
+                folder = random.choice(self.val)
                 seqNum = random.randint(self.starting + self.seq_length - 1 + self.separation*self.seq_length, folder[1] - batch_size - 1)
 
             X, y = [], []
@@ -252,8 +244,8 @@ class DataSet():
             for _ in range(batch_size):
 
                 if self.sequence == False:
-                    folder = random.choice(self.test)
-                    seqNum = random.randint(self.starting + self.seq_length - 1 + self.separation*self.seq_length, folder[1] - batch_size - 1)
+                    folder = random.choice(self.val)
+                    seqNum = random.randint(self.starting, folder[1] - batch_size - 1)
 
                 # reset
                 sequence = None
@@ -281,7 +273,7 @@ class DataSet():
             yield np.array(X), np.array(y)
 
 
-    def test(self, folder, seqNum):
+    def val(self, folder, seqNum):
 
         X, y = [], []
             
@@ -319,7 +311,7 @@ class DataSet():
         return np.array(X), np.array(y), Nef, var_img
 
 
-    def test_batch(self, folder, seqNum, batch_size, pngs):
+    def val_batch(self, folder, seqNum, batch_size, pngs):
 
         X, y = [], []
 

@@ -10,3 +10,6 @@
 - plotting_functions/*.py: functions for plotting (obviously).
 - clean.py
 
+## Dependencies
+Tensorflow
+panda

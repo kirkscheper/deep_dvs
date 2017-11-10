@@ -62,13 +62,13 @@ def train(model, saved_model = None, transfer_learning = None, seq_length = 150,
 if __name__ == '__main__':
 
     # input number frames
-    seq_length = 2
+    seq_length = 1
 
-    # name of the model
+    # name of the model (FlowNetSimple, convLSTM, convLSTM_dt, VGG_16)
     model = 'FlowNetSimple'
 
     # path to dataset
-    dataFolder = 'images_split_variance'
+    dataFolder = '../dvs_simulator/generated_datasets/images/temporal_250'
 
     # load a checkpoint
     saved_model = None
@@ -84,13 +84,13 @@ if __name__ == '__main__':
         sequence = False
 
     # image separation (if seq_length > 1)
-    separation = 15
+    separation = 1
     
-    # image type
-    imType = 'both'
+    # image type (ON, OFF, BOTH, None)
+    imType = None
 
     # stack images
-    stack = True
+    stack = False
 
     # train the model
     train(model, saved_model = saved_model, transfer_learning = transfer_learning, seq_length = seq_length, dataFolder = dataFolder, stack = stack, imType = imType, separation = separation, sequence = sequence)

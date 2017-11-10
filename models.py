@@ -5,12 +5,13 @@ from collections import deque
 from keras.optimizers import Adam, SGD
 from keras.models import model_from_json
 from keras.models import Sequential, load_model
-from keras.layers import Dense, Flatten, Dropout, LSTM, Reshape, ZeroPadding2D, Input
+from keras.layers import Dense, Flatten, Dropout, LSTM, Reshape, ZeroPadding2D, Input, concatenate
 from keras.layers.wrappers import TimeDistributed
 from keras.layers.convolutional import (Conv2D, MaxPooling3D, Conv3D, MaxPooling2D, AveragePooling2D)
 from keras.regularizers import l2
 
 from keras.applications.vgg16 import VGG16
+from keras.models import Model
 
 
 class ResearchModels():
@@ -34,6 +35,8 @@ class ResearchModels():
             self.model = self.convLSTM()
         elif model == 'VGG_16':
             self.model = self.VGG_16()
+	elif model == 'FlowNetSimpleRNN':
+	    self.model = self.FlowNetSimpleRNN()
         else:
             print("Unknown network.")
             sys.exit()
@@ -64,7 +67,13 @@ class ResearchModels():
             
         # compile the network
         optimizer = Adam(lr=1e-4)
-        self.model.compile(loss='mean_squared_error', optimizer=optimizer)
+        self.model.compile(loss=self.custom_MSE, optimizer=optimizer)
+
+
+    def custom_MSE(self, y_true, y_pred):
+        v_pred        = K.reshape(y_pred[:,:-1], [-1, 2])
+        ventral_loss  = K.mean(K.square(v_pred - y_true), axis=-1)
+        return ventral_loss
 
 
     def FlowNetSimple(self):
@@ -80,6 +89,30 @@ class ResearchModels():
         model.add(Flatten())
         model.add(Dense(2))
         model.summary()
+        return model
+
+    def FlowNetSimpleRNN(self):
+
+        mult = 1.
+        reg  = 0.
+
+        # convolution
+        image    = Input(shape=self.input_shape, name='image')
+        conv2d_1 = Conv2D(int(64*mult), (7,7), activation='relu', strides = 2, kernel_regularizer=l2(reg))(image)
+        conv2d_2 = Conv2D(int(128*mult), (5,5), activation='relu', strides = 2, kernel_regularizer=l2(reg))(conv2d_1)
+        conv2d_3 = Conv2D(int(256*mult), (3,3), activation='relu', strides = 2, kernel_regularizer=l2(reg))(conv2d_2)
+        conv2d_4 = Conv2D(int(512*mult), (3,3), activation='relu', strides = 1, kernel_regularizer=l2(reg))(conv2d_3)
+        conv2d_5 = Conv2D(int(512*mult), (3,3), activation='relu', strides = 1, kernel_regularizer=l2(reg))(conv2d_4)
+        conv2d_6 = Conv2D(int(1024*mult), (3,3), activation='relu', strides = 1, kernel_regularizer=l2(reg))(conv2d_5)
+        flatten  = Flatten()(conv2d_6)
+        dense_1  = Dense(128)(flatten)
+
+        exposure     = Input(shape=(1,), name='exposure')
+        merged_dense = concatenate([dense_1, exposure])
+        dense_2      = Dense(3)(merged_dense)
+        model        = Model(inputs=[image, exposure], outputs = [dense_2])
+        model.summary()
+
         return model
 
     def convLSTM(self):

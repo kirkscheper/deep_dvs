@@ -16,10 +16,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)),'dvs_
 from dataset_bagfiles import *
 
 class SimSetting():
-    def __init__ (self, accumTime=1000, imType='temporal', expScale=0.00025):
+    def __init__ (self, accumTime=1000, imType='temporal', expScale=0.00025, imgSkip=10):
         self.accumTime = accumTime
         self.imType = imType
         self.expScale = expScale
+        self.imgSkip = imgSkip
     
 class DataSet():
 
@@ -134,8 +135,8 @@ class DataSet():
                     accumTime = self.sim_settings.accumTime,
                     imtype = self.sim_settings.imType,
                     expScale = self.sim_settings.expScale,
-                    imageSkip = 10,
-                    imgCnt = i/10,
+                    imageSkip = self.sim_settings.imgSkip,
+                    imgCnt = i/self.sim_settings.imgSkip,
                     store_imgs = False)
                 
                 img_arr = img_to_array(img)
@@ -195,9 +196,8 @@ class DataSet():
                 folder = random.choice(self.train)
                 if self.online_sim:
                     max_image_number = data.get_duration_of_dataset_ms(self.folder + '/' + str(self.train[0][0]) + '/' + str(self.train[0][0]) + '.bag')
-                else:
                     max_image_number = folder[1]
-                seqNum = random.randint(self.starting + self.separation*(self.seq_length-1), max_image_number - batch_size - 1)
+                seqNum = random.randint(self.starting + self.separation*(self.seq_length-1), max_image_number - (batch_size- 1)*self.sim_settings.imgSkip)
             
             X, y = [], []
             
@@ -348,3 +348,43 @@ class DataSet():
             else: break
 
         return np.array(X), np.array(y), seqNum
+
+
+
+    def train_function(self, sample_size, i, lamb):
+
+        # get the folder and sequence number
+        if i == 0:
+            self.sample_folder = random.choice(self.train)
+            self.sample_seqNum = random.randint(self.starting + self.seq_length - 1 + self.separation*self.seq_length, 1000 - (sample_size- 1)*self.sim_settings.imgSkip)
+
+        X, y = [], []
+        X2 = []
+
+        if lamb < 1e-5:
+            lamb = 1e-5
+        elif lamb > 0.0037: # will reach 10% of max within 10ms
+            lamb =  0.0037
+        lamb = np.full((1, 1), lamb)
+            
+        # get the frames in this sample
+        sample = [self.sample_folder[0], self.sample_seqNum]
+
+        # build the image sequence
+        sequence = self.get_image_sequence(sample)
+
+        # get the ground-truth data 
+        gt = self.get_grndTruth(sample)
+
+        # next step in the sequence
+        self.sample_seqNum += 1
+
+        if sequence is None:
+            print("\nCan't find sequence. Did you generate them?")
+            sys.exit()
+
+        X.append(sequence)
+        y.append(gt)
+        X2.append(lamb)
+
+        return [np.array(X), np.array(lamb)], np.array(y)

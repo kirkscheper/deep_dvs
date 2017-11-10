@@ -43,20 +43,33 @@ def train(model, saved_model = None, transfer_learning = None, seq_length = 150,
 
     # initialize the model
     rm = ResearchModels(model, seq_length, saved_model, imType, transfer_learning = transfer_learning)
-    
-     # set generators
-    generator     = data.train_generator(batch_size)
-    val_generator = data.validate_generator(batch_size)
+
+    # set generators
+    generator     = data.train_generator(1)
+    val_generator = data.validate_generator(1)
+
+    # train the model
+    for e in range(0,nb_epoch):
+        for s in range(0,2500):
+
+            lamb = 1.0
+            for b in range(0,batch_size):
+
+                X, y = data.train_function(batch_size, b, lamb)
+                output = rm.model.predict(X, batch_size=1, verbose=0)
+                loss = rm.model.fit(X, y, batch_size = 1, epochs = 1, verbose = 0)
+                lamb = output[0][-1]
+                print loss
 
     # use fit generator for training
-    rm.model.fit_generator(
-        generator = generator,
-        steps_per_epoch = 2500,
-        epochs  = nb_epoch,
-        verbose = 1,
-        callbacks = [checkpointer, tb, csv_logger],
-        validation_data  = val_generator,
-        validation_steps = 1000)
+    # rm.model.fit_generator(
+    #     generator = generator,
+    #     steps_per_epoch = 2500,
+    #     epochs  = nb_epoch,
+    #     verbose = 1,
+    #     callbacks = [checkpointer, tb, csv_logger],
+    #     validation_data  = val_generator,
+    #     validation_steps = 1000)
     
 
 if __name__ == '__main__':
@@ -65,7 +78,7 @@ if __name__ == '__main__':
     seq_length = 1
 
     # name of the model (FlowNetSimple, convLSTM, convLSTM_dt, VGG_16)
-    model = 'FlowNetSimple'
+    model = 'FlowNetSimpleRNN'
 
     # path to dataset
     dataFolder = '../dvs_simulator/generated_datasets/fede'#../dvs_simulator/generated_datasets/images/temporal_250'

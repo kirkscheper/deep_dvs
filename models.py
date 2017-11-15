@@ -35,8 +35,8 @@ class ResearchModels():
             self.model = self.convLSTM()
         elif model == 'VGG_16':
             self.model = self.VGG_16()
-	elif model == 'FlowNetSimpleRNN':
-	    self.model = self.FlowNetSimpleRNN()
+        elif model == 'FlowNetSimpleRNN':
+            self.model = self.FlowNetSimpleRNN()
         else:
             print("Unknown network.")
             sys.exit()

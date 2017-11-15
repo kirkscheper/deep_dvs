@@ -112,59 +112,56 @@ class DataSet():
                 self.val.append(item[1:])
 
     # get an image sequence of length self.seq_length starting at sample, separated by self.separation image frames
-    def get_image_sequence(self, sample):
+    def get_image_sequence(self, folder, sample_num, batch_size):
 
         # number of frames used
         self.frame_num = []
         
         # 1D array with the frames in this sample
-        sequence = None
-        path = self.folder + '/' + sample[0]
+        path = self.folder + '/' + folder
         
         data = dataset('')
-        for i in range(sample[1], sample[1] - self.seq_length, -self.separation):
-
-            # update the frame index vector
-            self.frame_num.append(i)
+        if self.online_sim:
+                
+            sequence = data.generate_images( 
+                pathFrom = self.folder,
+                bagFile = folder,
+                accumTime = self.sim_settings.accumTime,
+                imtype = self.sim_settings.imType,
+                expScale = self.sim_settings.expScale,
+                #imageSkip = self.sim_settings.imgSkip,
+                imgCntStart = sample_num,
+                store_imgs = False,
+                num_imgs = batch_size)
             
-            if self.online_sim:
-                
-                img = data.generate_images( 
-                    pathFrom = self.folder,
-                    bagFile = sample[0],
-                    accumTime = self.sim_settings.accumTime,
-                    imtype = self.sim_settings.imType,
-                    expScale = self.sim_settings.expScale,
-                    imageSkip = self.sim_settings.imgSkip,
-                    imgCnt = i/self.sim_settings.imgSkip,
-                    store_imgs = False)
-                
-                img_arr = img_to_array(img)
-                frame = (img_arr / 255.).astype(np.float32)
-            else:
+            self.frame_num = range(sample_num, sample_num + batch_size) #self.sim_settings.imgSkip
+            
+        else:
+            for i in range(sample_num, sample_num + self.seq_length*self.separation, self.separation):
 
+                # update the frame index vector
+                self.frame_num.append(i)
+            
                 # include the number of the desired image
                 if self.imType == 'OFF' or self.imType == 'ON':
                     frame = load_image(path + '/' + self.imType + '/' + str(i) + '.png', self.image_shape)
                 elif self.imType == 'BOTH':
                     frame = load_image(path + '/ON' + '/' + str(i) + '.png', self.image_shape)
-                    np.dstack(frame, load_image(path + '/OFF' + '/' + str(i) + '.png', self.image_shape))
+                    np.dstack((frame, load_image(path + '/OFF' + '/' + str(i) + '.png', self.image_shape)))
                 else:
                     frame = load_image(path + '/' + str(i) + '.png', self.image_shape)
                 
-            if sequence == None:
+            if not 'sequence' in vars():
                 sequence = frame
             else:
-                np.dstack(sequence, frame)
+                np.dstack((sequence, frame))
                     
         return sequence
 
 
-    def get_grndTruth(self, sample):
-        path = self.folder + '/' + sample[0]
+    def get_grndTruth(self, folder, sample_nums):
+        path = self.folder + '/' + folder
             
-        print path
-
         if self.seq_length == 2 and self.pxShift == True: # pixel shift
             filename = 'trajectory.txt'
             gt = np.loadtxt(path + '/' + filename)
@@ -172,8 +169,8 @@ class DataSet():
             # load trajectory data
             x, y = [], []
             for i in range(0, len(self.frame_num)):
-                x.append(gt[self.frame_num[i] - 1, 1])
-                y.append(gt[self.frame_num[i] - 1, 2])
+                x.append(gt[sample_nums[i], 1])
+                y.append(gt[sample_nums[i], 2])
 
             # compute pixel shift
             pxShift = [-(x[0] - x[1])*self.m2px, -(y[0] - y[1])*self.m2px]
@@ -183,7 +180,7 @@ class DataSet():
 
             filename = 'ventral_flow.txt'
             gt = np.loadtxt(path + '/' + filename)
-            return gt[sample[1] - 1, 1:3].astype(np.float32)
+            return gt[sample_nums, 1:3].astype(np.float32)
 
 
     def train_generator(self, batch_size):
@@ -268,14 +265,11 @@ class DataSet():
                 # reset
                 sequence = None
                     
-                # get the frames in this sample
-                sample = [folder[0], seqNum]
-
                 # build the image sequence
-                sequence = self.get_image_sequence(sample)
+                sequence = self.get_image_sequence(folder[0], seqNum)
 
                 # get the ground-truth data 
-                gt = self.get_grndTruth(sample)
+                gt = self.get_grndTruth(folder[0], self.frame_num)
 
                 # next step in the sequence
                 seqNum += 1
@@ -294,14 +288,11 @@ class DataSet():
 
         X, y = [], []
             
-        # get the frames in this sample
-        sample = [folder, seqNum]
-
         # build the image sequence
-        sequence = self.get_image_sequence(sample)
+        sequence = self.get_image_sequence(folder, seqNum)
 
         # get the ground-truth data 
-        gt = self.get_grndTruth(sample)
+        gt = self.get_grndTruth(folder, self.frame_num)
 
         # next step in the sequence
         seqNum += 1
@@ -336,14 +327,11 @@ class DataSet():
 
             if seqNum < pngs:
                 
-                # get the frames in this sample
-                sample = [folder, seqNum]
-
                 # build the image sequence
-                sequence = self.get_image_sequence(sample)
+                sequence = self.get_image_sequence(folder, seqNum)
 
                 # get the ground-truth data 
-                gt = self.get_grndTruth(sample)
+                gt = self.get_grndTruth(folder, self.frame_num)
 
                 # next step in the sequence
                 seqNum += 1
@@ -361,40 +349,38 @@ class DataSet():
 
 
 
-    def train_function(self, sample_size, i, lamb):
+    def data_function(self, i, batch_size, lamb, type):
 
-        # get the folder and sequence number
         if i == 0:
-            self.sample_folder = random.choice(self.train)
-            self.sample_seqNum = random.randint(self.starting + self.seq_length - 1 + self.separation*self.seq_length, 1000 - (sample_size- 1)*self.sim_settings.imgSkip)
-
-        X, y = [], []
-        X2 = []
-
+            # get the folder and sequence number
+            if type=='train':
+                self.sample_folder = random.choice(self.train)
+            else:
+                self.sample_folder = random.choice(self.val)
+            
+            self.sample_seqNum = random.randint(self.starting, 985 - (self.seq_length*self.separation) - batch_size)    # somehow there are no events after 986ms
+            
         if lamb < 1e-5:
             lamb = 1e-5
         elif lamb > 0.01:
             lamb =  0.01
-        lamb = np.full((1, 1), lamb)
-            
-        # get the frames in this sample
-        sample = [self.sample_folder[0], self.sample_seqNum]
+        lamb = np.full((batch_size, 1), lamb)
 
         # build the image sequence
-        sequence = self.get_image_sequence(sample)
+        sequence = self.get_image_sequence(self.sample_folder[0], self.sample_seqNum, batch_size)
 
         # get the ground-truth data 
-        gt = self.get_grndTruth(sample)
+        gt = self.get_grndTruth(self.sample_folder[0], self.frame_num)
 
         # next step in the sequence
-        self.sample_seqNum += 1
+        self.sample_seqNum += self.separation
 
         if sequence is None:
             print("\nCan't find sequence. Did you generate them?")
             sys.exit()
 
-        X.append(sequence)
-        y.append(gt)
-        X2.append(lamb)
-
+        X = sequence
+        y = gt
+        
         return [np.array(X), np.array(lamb)], np.array(y)
+    

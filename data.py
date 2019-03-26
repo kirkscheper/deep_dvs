@@ -16,17 +16,17 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)),'dvs_
 from dataset_bagfiles import *
 
 class SimSetting():
-    def __init__ (self, accumTime=1000, imType='temporal', expScale=0.00025, imgSkip=10):
+    def __init__ (self, accumTime=1000, imType='temporal', expScale=0.00025, imageResMs=5):
         self.accumTime = accumTime
         self.imType = imType
         self.expScale = expScale
-        self.imgSkip = imgSkip
+        self.imageResMs = imageResMs
     
 class DataSet():
 
     # constructor
     def __init__(self, seq_length = 150, image_shape = (128, 128, 1), dataFolder = 'dataset', imType = None,
-                  separation = 1, pxShift = False, sequence_batch = False, online_sim = True, 
+                  separation = 1, pxShift = False, sequence_batch = False, online_sim = False, 
                   sim_settings = SimSetting()):
 
         # get the name of the dataset folder
@@ -112,7 +112,7 @@ class DataSet():
                 self.val.append(item[1:])
 
     # get an image sequence of length self.seq_length starting at sample, separated by self.separation image frames
-    def get_image_sequence(self, folder, sample_num, batch_size):
+    def get_image_sequence(self, folder, sample_num, batch_size=1):
 
         # number of frames used
         self.frame_num = []
@@ -129,12 +129,12 @@ class DataSet():
                 accumTime = self.sim_settings.accumTime,
                 imtype = self.sim_settings.imType,
                 expScale = self.sim_settings.expScale,
-                #imageSkip = self.sim_settings.imgSkip,
+                imageResMs = self.sim_settings.imageResMs,
                 imgCntStart = sample_num,
                 store_imgs = False,
                 num_imgs = batch_size)
             
-            self.frame_num = range(sample_num, sample_num + batch_size) #self.sim_settings.imgSkip
+            self.frame_num = range(sample_num, sample_num + batch_size*self.sim_settings.imageResMs, self.sim_settings.imageResMs) #self.sim_settings.imgSkip
             
         else:
             for i in range(sample_num, sample_num + self.seq_length*self.separation, self.separation):
@@ -186,15 +186,14 @@ class DataSet():
     def train_generator(self, batch_size):
         
         while 1:
-            data = dataset('')
-            
+
             # get the folder and sequence number
             if self.sequence_batch == True:
                 folder = random.choice(self.train)
                 if self.online_sim:
-                    max_image_number = data.get_duration_of_dataset_ms(self.folder + '/' + str(self.train[0][0]) + '/' + str(self.train[0][0]) + '.bag')
+                    max_image_number = 980 # data.get_duration_of_dataset_ms(self.folder + '/' + str(self.train[0][0]) + '/' + str(self.train[0][0]) + '.bag')
                     max_image_number = folder[1]
-                seqNum = random.randint(self.starting + self.separation*(self.seq_length-1), max_image_number - (batch_size- 1)*self.sim_settings.imgSkip)
+                seqNum = random.randint(self.starting, max_image_number - (self.seq_length*self.separation) - batch_size)
             
             X, y = [], []
             
@@ -205,29 +204,26 @@ class DataSet():
                 if self.sequence_batch == False:
                     folder = random.choice(self.train)
                     if self.online_sim:
-                        max_image_number = 1000 #data.get_duration_of_dataset_ms(self.folder + '/' + str(self.train[0][0]) + '/' + str(self.train[0][0]) + '.bag')
+                        max_image_number = 980 #data.get_duration_of_dataset_ms(self.folder + '/' + str(self.train[0][0]) + '/' + str(self.train[0][0]) + '.bag')
                     else:
                         max_image_number = folder[1]
-                    seqNum = random.randint(self.starting, max_image_number - batch_size - 1)
+                    seqNum = random.randint(self.starting, max_image_number - (self.seq_length*self.separation))
                 
                 # reset
                 sequence = None
                     
-                # get the frames in this sample
-                sample = [folder[0], seqNum]
-            
                 # read image sequence from premade files
-                sequence = self.get_image_sequence(sample)
+                sequence = self.get_image_sequence(folder[0], seqNum)
                     
                 if sequence is None:
                     print("\nCan't find sequence. Did you generate them?")
                     sys.exit()
                 
-                # next step in the sequence
-                seqNum += 1     # TODO add step size here
-    
                 # get the ground-truth data 
-                gt = self.get_grndTruth(sample)
+                gt = self.get_grndTruth(folder[0], seqNum)
+                
+                # next step in the sequence
+                seqNum += 1
 
                 X.append(sequence)
                 y.append(gt)
@@ -238,15 +234,14 @@ class DataSet():
     def validate_generator(self, batch_size):
 
         while 1:
-            data = dataset('')
 
             # get the folder and sequence number
             if self.sequence_batch == True:
-                folder = random.choice(self.val)
+                folder = random.choice(self.train)
                 if self.online_sim:
-                    max_image_number = data.get_duration_of_dataset_ms(self.folder + '/' + str(self.train[0][0]) + '/' + str(self.train[0][0]) + '.bag')
+                    max_image_number = 980 # data.get_duration_of_dataset_ms(self.folder + '/' + str(self.train[0][0]) + '/' + str(self.train[0][0]) + '.bag')
                     max_image_number = folder[1]
-                seqNum = random.randint(self.starting + self.separation*(self.seq_length-1), max_image_number - (batch_size- 1)*self.sim_settings.imgSkip)
+                seqNum = random.randint(self.starting, max_image_number - (self.seq_length*self.separation) - batch_size)
             
             X, y = [], []
             
@@ -257,26 +252,26 @@ class DataSet():
                 if self.sequence_batch == False:
                     folder = random.choice(self.val)
                     if self.online_sim:
-                        max_image_number = 1000 #data.get_duration_of_dataset_ms(self.folder + '/' + str(self.train[0][0]) + '/' + str(self.train[0][0]) + '.bag')
+                        max_image_number = 980 #data.get_duration_of_dataset_ms(self.folder + '/' + str(self.train[0][0]) + '/' + str(self.train[0][0]) + '.bag')
                     else:
                         max_image_number = folder[1]
-                    seqNum = random.randint(self.starting, max_image_number - batch_size - 1)
-
+                    seqNum = random.randint(self.starting, max_image_number - (self.seq_length*self.separation))
+                
                 # reset
                 sequence = None
                     
-                # build the image sequence
+                # read image sequence from premade files
                 sequence = self.get_image_sequence(folder[0], seqNum)
-
-                # get the ground-truth data 
-                gt = self.get_grndTruth(folder[0], self.frame_num)
-
-                # next step in the sequence
-                seqNum += 1
-
+                    
                 if sequence is None:
                     print("\nCan't find sequence. Did you generate them?")
                     sys.exit()
+                
+                # get the ground-truth data 
+                gt = self.get_grndTruth(folder[0], seqNum)
+                
+                # next step in the sequence
+                seqNum += 1
 
                 X.append(sequence)
                 y.append(gt)
@@ -349,31 +344,33 @@ class DataSet():
 
 
 
-    def data_function(self, i, batch_size, lamb, type):
+    def data_function(self, i, batch_size, lamb, data_type):
 
         if i == 0:
             # get the folder and sequence number
-            if type=='train':
+            if data_type == 'train':
                 self.sample_folder = random.choice(self.train)
             else:
                 self.sample_folder = random.choice(self.val)
             
-            self.sample_seqNum = random.randint(self.starting, 985 - (self.seq_length*self.separation) - batch_size)    # somehow there are no events after 986ms
+            self.sample_seqNum = random.randint(self.starting / self.sim_settings.imageResMs, 980 / self.sim_settings.imageResMs - (self.seq_length*self.separation) - batch_size)    # somehow there are no events after 986ms
             
-        if lamb < 1e-5:
-            lamb = 1e-5
-        elif lamb > 0.01:
-            lamb =  0.01
-        lamb = np.full((batch_size, 1), lamb)
+        if lamb < 0.001:
+            lamb = 0.001
+        elif lamb > 1:
+            lamb =  1
+        #print 'lamb ' + str(lamb) + ' 1/ms, mean lifetime ' + str(0.001/lamb) + ' s'
 
+        self.sim_settings.expScale = lamb / 1000
+        
         # build the image sequence
         sequence = self.get_image_sequence(self.sample_folder[0], self.sample_seqNum, batch_size)
-
+        
         # get the ground-truth data 
         gt = self.get_grndTruth(self.sample_folder[0], self.frame_num)
 
         # next step in the sequence
-        self.sample_seqNum += self.separation
+        self.sample_seqNum += self.separation / self.sim_settings.imageResMs
 
         if sequence is None:
             print("\nCan't find sequence. Did you generate them?")
@@ -381,6 +378,8 @@ class DataSet():
 
         X = sequence
         y = gt
+        lamb = np.full((batch_size, 1), lamb)
         
-        return [np.array(X), np.array(lamb)], np.array(y)
+        #return [np.array(X), np.array(lamb)], np.array(y)
+        return np.array(X), np.array(y)
     

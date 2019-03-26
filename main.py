@@ -5,7 +5,8 @@ import time
 from data import DataSet
 from models import ResearchModels
 from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, CSVLogger
-import numpy as np 
+import numpy as np
+import random
 
 def train(model, saved_model = None, transfer_learning = None, seq_length = 150, dataFolder = 'dataset', imType = None, separation = 0, pxShift = False, sequence_batch = False):
 
@@ -34,72 +35,78 @@ def train(model, saved_model = None, transfer_learning = None, seq_length = 150,
     timestamp = time.time()
     csv_logger = CSVLogger(pathLogs + model + '-' + 'training-' + str(timestamp) + '.log')
 
-    # initialize the dataset
-    data = DataSet(seq_length = seq_length, dataFolder = dataFolder, imType = imType, separation = separation, pxShift = pxShift, sequence_batch = sequence_batch)
-
     # set training variables
     nb_epoch = 100
-    nb_samples = 50
-    nb_validation = 20
+    nb_samples = 500
+    nb_validation = 200
+    batch_size = 10
     
-    batch_size = 5
-
     # initialize the model
     rm = ResearchModels(model, 1, saved_model, imType, transfer_learning = transfer_learning)
 
-    # set generators
-    generator     = data.train_generator(1)
-    val_generator = data.validate_generator(1)
-
-    # train the model
-    for e in range(0,nb_epoch):
-        for s in range(0,nb_samples):
-
-            lamb = 1.0
-            sum_loss = 0.
-            for b in range(0,seq_length):
-
-                X, y = data.data_function(b, batch_size, lamb, 'train')
-                output = rm.model.predict(X, batch_size=batch_size, verbose=0)
-                loss = rm.model.fit(X, y, batch_size=batch_size, epochs = 1, verbose = 0)
-                lamb = output[0][-1]
-                sum_loss += loss.history['loss'][0]
-        train_loss = sum_loss/seq_length/nb_samples
+    if model == 'FlowNetSimpleRNN':
+        # initialize the dataset
+        data = DataSet(seq_length = seq_length, dataFolder = dataFolder, imType = imType, separation = separation, pxShift = pxShift, sequence_batch = sequence_batch,online_sim=True)
         
-        for v in range(0,nb_validation):
-            
-            lamb = 1.0
+        # train the model
+        for e in range(0,nb_epoch):
             sum_loss = 0.
-            for b in range(0,seq_length):
-                X, y = data.data_function(b, batch_size, lamb, 'train')
-                output = rm.model.predict(X, batch_size=batch_size, verbose=0)
-                loss = rm.model.fit(X, y, batch_size=batch_size, epochs = 1, verbose = 0)
-                lamb = output[0][-1]
-                sum_loss += loss.history['loss'][0]
-                val_loss = sum_loss/seq_length/nb_validation
-        print 'Epoch ' + str(e) + ', Training Loss: ' + str(train_loss) + ', Validation Loss: ' + str(val_loss)
+            for s in range(0,nb_samples):
+     
+                lamb = 0.05#random.randint(1, 1000) * 0.001
+                for b in range(0,seq_length):
+                    X, y = data.data_function(b, batch_size, lamb, 'train')
+                    loss = rm.model.fit(X, y, batch_size=batch_size, epochs = 1, verbose = 0)
+                    sum_loss += loss.history['loss'][0]
+                     
+                    output = rm.model.predict(X, batch_size=batch_size, verbose=0)
+                    print '\r' + str(y[0]) + ' ' + str(output[0]) + ' ' + str(loss.history['loss'][0]),
+                    #lamb = output[0][-1]
+            train_loss = sum_loss/seq_length/nb_samples
+     
+            sum_loss = 0.        
+            for v in range(0,nb_validation):
+                 
+                lamb = 0.05#random.randint(1, 1000) * 0.001
+                for b in range(0,seq_length):
+                    X, y = data.data_function(b, batch_size, lamb, 'val')
+                    loss = rm.model.fit(X, y, batch_size=batch_size, epochs = 1, verbose = 0)
+                    sum_loss += loss.history['loss'][0]
+                     
+                    output = rm.model.predict(X, batch_size=batch_size, verbose=0)
+                    #lamb = output[0][-1]
+            val_loss = sum_loss/seq_length/nb_validation
+            print 'Epoch ' + str(e) + ', Training Loss: ' + str(train_loss) + ', Validation Loss: ' + str(val_loss)
 
-    # use fit generator for training
-    # rm.model.fit_generator(
-    #     generator = generator,
-    #     steps_per_epoch = 2500,
-    #     epochs  = nb_epoch,
-    #     verbose = 1,
-    #     callbacks = [checkpointer, tb, csv_logger],
-    #     validation_data  = val_generator,
-    #     validation_steps = 1000)
+    else:
+        # initialize the dataset
+        data = DataSet(seq_length = seq_length, dataFolder = dataFolder, imType = imType, separation = separation, pxShift = pxShift, sequence_batch = sequence_batch,online_sim=False)
+        
+        # set generators
+        generator     = data.train_generator(batch_size)
+        val_generator = data.validate_generator(batch_size)
+        
+        # use fit generator for training
+        rm.model.fit_generator(
+            generator = generator,
+            steps_per_epoch = nb_samples,
+            epochs  = nb_epoch,
+            verbose = 1,
+            callbacks = [checkpointer, tb, csv_logger],
+            validation_data  = val_generator,
+            validation_steps = nb_validation)
     
 
 if __name__ == '__main__':
 
     # input number frames
-    seq_length = 2
+    seq_length = 10
 
-    # name of the model (FlowNetSimple, convLSTM, convLSTM_dt, VGG_16)
-    model = 'FlowNetSimpleRNN'
+    # name of the model (FlowNetSimple, FlowNetSimpleRNN, convLSTM, convLSTM_dt, VGG_16)
+    model = 'FlowNetSimple'
 
     # path to dataset
-    dataFolder = '../dvs_simulator/generated_datasets/fede'#../dvs_simulator/generated_datasets/images/temporal_250'
+    dataFolder = '../dvs_simulator/generated_datasets/images/temporal_25'#../dvs_simulator/generated_datasets/fede'#../dvs_simulator/generated_datasets/images/temporal_250'
 
     # load a checkpoint
     saved_model = None
@@ -115,7 +122,7 @@ if __name__ == '__main__':
         sequence_batch = False
 
     # image separation (if seq_length > 1)
-    separation = 1
+    separation = 0
     
     # image type (ON, OFF, BOTH, None)
     imType = None

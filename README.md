@@ -12,4 +12,5 @@
 
 ## Dependencies
 Tensorflow
-panda
+
+pip install tensorflow-gpu keras pandas h5py

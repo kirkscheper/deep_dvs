@@ -12,7 +12,34 @@ from keras.regularizers import l2
 
 from keras.applications.vgg16 import VGG16
 from keras.models import Model
+from keras.optimizers import Adam, clip_norm
+import tensorflow as tf
 
+class MyAdam(Adam):
+    """Own implementation of Adam optimizer.
+
+    Default parameters follow those provided in the original paper.
+
+    # Arguments
+        lr: float >= 0. Learning rate.
+        beta_1: float, 0 < beta < 1. Generally close to 1.
+        beta_2: float, 0 < beta < 1. Generally close to 1.
+        epsilon: float >= 0. Fuzz factor.
+        decay: float >= 0. Learning rate decay over each update.
+
+    # References
+        - [Adam - A Method for Stochastic Optimization](http://arxiv.org/abs/1412.6980v8)
+    """
+
+    def get_gradients(self, loss, params):
+        grads = tf.gradients(loss, params, grad_ys=None, colocate_gradients_with_ops=True) #K.gradients(loss, params)
+        if hasattr(self, 'clipnorm') and self.clipnorm > 0:
+            norm = K.sqrt(sum([K.sum(K.square(g)) for g in grads]))
+            grads = [clip_norm(g, self.clipnorm, norm) for g in grads]
+        if hasattr(self, 'clipvalue') and self.clipvalue > 0:
+            grads = [K.clip(g, -self.clipvalue, self.clipvalue) for g in grads]
+        return grads
+    
 
 class ResearchModels():
     def __init__(self, model, seq_length, saved_model, imType, transfer_learning = None):
@@ -66,8 +93,10 @@ class ResearchModels():
             self.model.load_weights(transfer_learning, by_name = True)
             
         # compile the network
-        optimizer = Adam(lr=1e-4)
-        self.model.compile(loss=self.custom_MSE, optimizer=optimizer)
+        if model == 'FlowNetSimpleRNN':
+            self.model.compile(loss=self.custom_MSE, optimizer=MyAdam(lr=1e-4))
+        else:
+            self.model.compile(loss='mean_squared_error', optimizer=Adam(lr=1e-4))
 
 
     def custom_MSE(self, y_true, y_pred):
